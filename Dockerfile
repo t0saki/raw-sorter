@@ -4,7 +4,7 @@
 # work (libheif/x265/aom, libraw) comes from pillow-heif / rawpy wheels, so building the other
 # arch under QEMU is just wheel downloads — no slow C builds. uv installs from the lockfile.
 
-FROM ghcr.io/astral-sh/uv:0.8-python3.12-bookworm-slim AS build
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim AS build
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=0
 WORKDIR /app
 # Resolve & install dependencies first for layer caching, without the project itself.
@@ -17,7 +17,7 @@ COPY . /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-FROM python:3.12-slim-bookworm
+FROM python:3.14-slim-trixie
 # libgomp1: OpenMP runtime used by the x265/aom encoders bundled in the wheels.
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
  && rm -rf /var/lib/apt/lists/*
