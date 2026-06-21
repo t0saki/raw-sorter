@@ -103,9 +103,12 @@ def build_parser() -> argparse.ArgumentParser:
         description="Watch a RAW+JPG folder; emit compact HEIF to an album folder and "
                     "move RAW masters to a cold archive. Env vars mirror every flag.",
     )
-    p.add_argument("--input", default=e("INPUT_DIR"), help="watched RAW+JPG root (env INPUT_DIR)")
-    p.add_argument("--album", default=e("ALBUM_DIR"), help="HEIF-only output, synced (env ALBUM_DIR)")
-    p.add_argument("--archive", default=e("ARCHIVE_DIR"), help="cold RAW archive (env ARCHIVE_DIR)")
+    p.add_argument("--input", default=e("INPUT_DIR", "/input"),
+                   help="watched RAW+JPG root (env INPUT_DIR, default /input)")
+    p.add_argument("--album", default=e("ALBUM_DIR", "/album"),
+                   help="HEIF-only output, synced (env ALBUM_DIR, default /album)")
+    p.add_argument("--archive", default=e("ARCHIVE_DIR", "/archive"),
+                   help="cold RAW archive (env ARCHIVE_DIR, default /archive)")
     p.add_argument("--format", dest="fmt", default=e("FORMAT", "heif"), choices=["heif", "avif"])
     p.add_argument("--quality", type=int, default=int(e("QUALITY", "50")))
     p.add_argument("--preset", default=e("PRESET", "slow"))
@@ -129,9 +132,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 def load(argv: list[str] | None = None) -> Config:
     args = build_parser().parse_args(argv)
-    for required in ("input", "album", "archive"):
-        if not getattr(args, required):
-            raise SystemExit(f"--{required} (or {required.upper()}_DIR) is required")
     # Resolve symlinks once so all later relpath arithmetic is consistent with the paths the
     # filesystem watcher reports (e.g. macOS /tmp -> /private/tmp). A no-op on a real NAS volume.
     cfg = Config(

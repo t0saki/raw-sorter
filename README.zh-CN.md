@@ -21,7 +21,7 @@ INPUT/  RAW + JPG  ──────┤
 - **保留元数据**：GPS、拍摄时间及全部 EXIF 一并写入 HEIF。
 - **方向正确**：旋转直接烘焙进像素，竖拍照片在任何看图软件里都不会被“二次旋转”。
 - **颜色正确**：很多相机拍 Adobe RGB 时并不嵌入 ICC 配置；本工具会把它们转换为 sRGB 并权威标记，避免在云端显示发灰。广色域原图保留在 RAW 存档里。
-- **保持目录结构**：`INPUT/` 下的子目录会在 `ALBUM/` 和 `ARCHIVE/` 中原样重建。
+- **保持目录结构**：`INPUT/` 下的子目录会在 `ALBUM/` 和 `ARCHIVE/` 中原样重建。NAS 系统目录（`@eaDir`、`#recycle`、`#snapshot`、`@Recycle`、`lost+found`、点目录）会自动跳过。
 - **持续且健壮**：实时文件监控 + 周期性全量重扫（兜底漏掉的事件）；文件稳定性检测（不会去碰还在通过 SMB 拷贝的文件）；原子发布（相册目录永远看不到写了一半的文件）；幂等、可随时重启；单文件失败隔离。
 - **只有 RAW 的帧**：没有同名 JPG 的 RAW 也会出一张 HEIF——从相机内嵌的（已套 LUT 的）预览里提取。
 
@@ -42,17 +42,14 @@ services:
     container_name: raw-sorter
     restart: unless-stopped
     user: "1026:100"            # 一个能读 INPUT、写 ALBUM 和 ARCHIVE 的 DSM 用户/组
-    environment:
-      INPUT_DIR: /input
-      ALBUM_DIR: /album
-      ARCHIVE_DIR: /archive
-      QUALITY: "50"
-      # PRESET: medium          # NAS CPU 较弱时调低
-      # WORKERS: "1"
+    # 容器内路径默认就是 /input、/album、/archive，直接挂到这三个点即可：
     volumes:
       - /volume1/photo/incoming:/input        # 你倒相机卡的地方（RAW+JPG）
       - /volume1/photo/Album:/album           # 一个 Synology Photos / 同步目录
       - /volume1/cold/raw-archive:/archive    # RAW 母片的冷存储
+    # environment:                            # 全部可选；默认值见下表
+    #   QUALITY: "50"
+    #   PRESET: medium                        # NAS CPU 较弱时调低
 ```
 
 ```bash
@@ -68,9 +65,9 @@ docker compose logs -f
 
 | 环境变量 / 参数 | 默认值 | 说明 |
 |---|---|---|
-| `INPUT_DIR` / `--input` | *（必填）* | 被监控的 RAW+JPG 根目录（递归） |
-| `ALBUM_DIR` / `--album` | *（必填）* | 仅 HEIF 的输出目录（被同步） |
-| `ARCHIVE_DIR` / `--archive` | *（必填）* | RAW 冷存档目录 |
+| `INPUT_DIR` / `--input` | `/input` | 被监控的 RAW+JPG 根目录（递归） |
+| `ALBUM_DIR` / `--album` | `/album` | 仅 HEIF 的输出目录（被同步） |
+| `ARCHIVE_DIR` / `--archive` | `/archive` | RAW 冷存档目录 |
 | `FORMAT` / `--format` | `heif` | `heif` 或 `avif` |
 | `QUALITY` / `--quality` | `50` | 0–100 |
 | `PRESET` / `--preset` | `slow` | x265 preset（NAS 弱就用 `medium`/`fast`） |

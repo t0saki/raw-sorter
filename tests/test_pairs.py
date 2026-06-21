@@ -20,7 +20,20 @@ def test_should_skip():
     assert should_skip(Path("/x/.hidden.jpg"))
     assert should_skip(Path("/x/.tmp/y.heic"))
     assert should_skip(Path("/x/.quarantine/y.jpg"))
+    assert should_skip(Path("/x/@eaDir/P1.JPG/SYNOPHOTO_THUMB_M.jpg"))  # Synology thumbnails
+    assert should_skip(Path("/x/#recycle/P1.JPG"))
+    assert should_skip(Path("/x/@Recycle/P1.JPG"))                      # QNAP, case-insensitive
     assert not should_skip(Path("/x/P1.JPG"))
+
+
+def test_iter_units_prunes_nas_dirs(tmp_path):
+    _touch(tmp_path / "trip" / "P1.JPG")
+    _touch(tmp_path / "trip" / "P1.RW2")
+    # Synology fills @eaDir with .jpg thumbnails that must never be processed
+    _touch(tmp_path / "trip" / "@eaDir" / "P1.JPG" / "SYNOPHOTO_THUMB_XL.jpg")
+    _touch(tmp_path / "#recycle" / "old.JPG")
+    keys = sorted(u.key[1] for u in iter_units(tmp_path))
+    assert keys == ["p1"]
 
 
 def test_resolve_unit_pairs(tmp_path):

@@ -21,7 +21,7 @@ INPUT/  RAW + JPG  ──────┤
 - **Metadata preserved** — GPS, capture date and all EXIF ride along into the HEIF.
 - **Orientation done right** — rotation is baked into the pixels, so portrait shots never double-rotate in any viewer.
 - **Correct colour** — Adobe RGB frames (which many cameras shoot without an embedded profile) are converted to sRGB and tagged authoritatively, so they don't look desaturated in the cloud. The wide-gamut original is preserved in the RAW archive.
-- **Mirrors your folder structure** — subfolders under `INPUT/` are recreated under `ALBUM/` and `ARCHIVE/`.
+- **Mirrors your folder structure** — subfolders under `INPUT/` are recreated under `ALBUM/` and `ARCHIVE/`. NAS system folders (`@eaDir`, `#recycle`, `#snapshot`, `@Recycle`, `lost+found`, dotfolders) are skipped automatically.
 - **Continuous & robust** — live filesystem watching + a periodic rescan that backstops missed events; file-stability detection (won't touch a file still being copied over SMB); atomic publish (the album folder never sees a half-written file); idempotent and restart-safe; per-file failure isolation.
 - **RAW-only frames** — a RAW with no sibling JPG still gets a HEIF, extracted from the camera's embedded (LUT-baked) preview.
 
@@ -42,17 +42,14 @@ services:
     container_name: raw-sorter
     restart: unless-stopped
     user: "1026:100"            # a DSM user/group that can read INPUT and write ALBUM + ARCHIVE
-    environment:
-      INPUT_DIR: /input
-      ALBUM_DIR: /album
-      ARCHIVE_DIR: /archive
-      QUALITY: "50"
-      # PRESET: medium          # lower if your NAS CPU is weak
-      # WORKERS: "1"
+    # The in-container paths default to /input, /album, /archive — just mount to them:
     volumes:
       - /volume1/photo/incoming:/input        # where you dump the camera card (RAW+JPG)
       - /volume1/photo/Album:/album           # a Synology Photos / synced folder
       - /volume1/cold/raw-archive:/archive    # cold storage for RAW masters
+    # environment:                            # all optional; defaults shown in the table below
+    #   QUALITY: "50"
+    #   PRESET: medium                        # lower if your NAS CPU is weak
 ```
 
 ```bash
@@ -68,9 +65,9 @@ Every option is an environment variable (handy for the DSM UI) and an equivalent
 
 | Env / flag | Default | Description |
 |---|---|---|
-| `INPUT_DIR` / `--input` | *(required)* | watched RAW+JPG root (recursive) |
-| `ALBUM_DIR` / `--album` | *(required)* | HEIF-only output (synced) |
-| `ARCHIVE_DIR` / `--archive` | *(required)* | cold RAW archive |
+| `INPUT_DIR` / `--input` | `/input` | watched RAW+JPG root (recursive) |
+| `ALBUM_DIR` / `--album` | `/album` | HEIF-only output (synced) |
+| `ARCHIVE_DIR` / `--archive` | `/archive` | cold RAW archive |
 | `FORMAT` / `--format` | `heif` | `heif` or `avif` |
 | `QUALITY` / `--quality` | `50` | 0–100 |
 | `PRESET` / `--preset` | `slow` | x265 preset (`medium`/`fast` on a weak NAS) |

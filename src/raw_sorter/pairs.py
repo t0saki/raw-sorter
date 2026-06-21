@@ -1,13 +1,19 @@
 """Group files in a directory into per-stem units of {jpg, raw, others}."""
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config import JPG_EXTS, RAW_EXTS
 
-# Names/dirs we create ourselves or that are never photo input.
-SKIP_DIR_NAMES = {".tmp", ".quarantine"}
+# Directories that are never photo input: our own working dirs plus common NAS system folders
+# (Synology @eaDir thumbnails / #recycle / #snapshot, QNAP @Recycle, lost+found). Matched
+# case-insensitively. Any dotfile/dotdir is also skipped (see should_skip).
+SKIP_DIR_NAMES = {
+    ".tmp", ".quarantine",
+    "@eadir", "#recycle", "#snapshot", "@tmp", "@recycle", "lost+found",
+}
 SKIP_FILE_NAMES = {".ds_store"}
 
 
@@ -73,15 +79,21 @@ def resolve_unit(directory: Path, stem: str) -> Unit:
 
 
 def iter_units(root: Path):
-    """Walk `root` recursively and yield one Unit per (directory, stem) that has a photo file."""
+    """Walk `root` recursively and yield one Unit per (directory, stem) that has a photo file.
+
+    Skip dirs (`@eaDir`, dotdirs, …) are pruned from the traversal so we never descend into them.
+    """
     seen: set[tuple[str, str]] = set()
-    for path in sorted(root.rglob("*")):
-        if not path.is_file() or should_skip(path):
-            continue
-        if classify_ext(path) is None:
-            continue
-        key = (str(path.parent), path.stem.lower())
-        if key in seen:
-            continue
-        seen.add(key)
-        yield resolve_unit(path.parent, path.stem)
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames
+                       if not d.startswith(".") and d.lower() not in SKIP_DIR_NAMES]
+        directory = Path(dirpath)
+        for name in sorted(filenames):
+            path = directory / name
+            if should_skip(path) or classify_ext(path) is None:
+                continue
+            key = (str(directory), path.stem.lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            yield resolve_unit(directory, path.stem)

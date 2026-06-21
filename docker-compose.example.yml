@@ -9,11 +9,9 @@ services:
     # On DSM, find a user's uid with:  `id <username>`  (the `users` group is gid 100).
     user: "1026:100"
 
+    # The in-container paths default to /input, /album, /archive — just mount to them below.
+    # Everything in `environment` is optional; the defaults are shown.
     environment:
-      INPUT_DIR: /input
-      ALBUM_DIR: /album
-      ARCHIVE_DIR: /archive
-
       # --- encoding ---
       FORMAT: heif          # heif | avif
       QUALITY: "50"         # 0-100
