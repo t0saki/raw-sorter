@@ -1,0 +1,35 @@
+# Copy to docker-compose.yml and edit the volume paths + user for your DSM.
+services:
+  raw-sorter:
+    image: ghcr.io/t0saki/raw-sorter:latest
+    container_name: raw-sorter
+    restart: unless-stopped
+
+    # IMPORTANT: pick a uid:gid that can READ the input share and WRITE the album + archive shares.
+    # On DSM, find a user's uid with:  `id <username>`  (the `users` group is gid 100).
+    user: "1026:100"
+
+    environment:
+      INPUT_DIR: /input
+      ALBUM_DIR: /album
+      ARCHIVE_DIR: /archive
+
+      # --- encoding ---
+      FORMAT: heif          # heif | avif
+      QUALITY: "50"         # 0-100
+      PRESET: slow          # x265 preset; use medium/fast if your NAS CPU is weak
+      CHROMA: "420"
+      COLOR: srgb           # srgb (convert wide-gamut for compatibility) | preserve
+
+      # --- behaviour ---
+      WORKERS: "1"          # parallel encodes; keep low on a NAS
+      SETTLE_SECONDS: "10"
+      RESCAN_INTERVAL: 5m
+      JPG_DISPOSITION: archive   # archive (keep original JPG beside RAW) | delete
+      RAW_WITHOUT_JPG: preview   # preview | archive | skip
+      LOG_LEVEL: info
+
+    volumes:
+      - /volume1/photo/incoming:/input        # camera card dump (RAW + JPG)
+      - /volume1/photo/Album:/album           # a Synology Photos / synced folder (HEIF only)
+      - /volume1/cold/raw-archive:/archive    # cold storage for RAW masters

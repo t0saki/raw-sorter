@@ -1,0 +1,58 @@
+from raw_sorter.pairs import classify_ext, iter_units, resolve_unit, should_skip
+from pathlib import Path
+
+
+def _touch(p: Path):
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(b"x")
+
+
+def test_classify_ext():
+    assert classify_ext(Path("a.JPG")) == "jpg"
+    assert classify_ext(Path("a.jpeg")) == "jpg"
+    assert classify_ext(Path("a.RW2")) == "raw"
+    assert classify_ext(Path("a.dng")) == "raw"
+    assert classify_ext(Path("a.txt")) is None
+
+
+def test_should_skip():
+    assert should_skip(Path("/x/.DS_Store"))
+    assert should_skip(Path("/x/.hidden.jpg"))
+    assert should_skip(Path("/x/.tmp/y.heic"))
+    assert should_skip(Path("/x/.quarantine/y.jpg"))
+    assert not should_skip(Path("/x/P1.JPG"))
+
+
+def test_resolve_unit_pairs(tmp_path):
+    _touch(tmp_path / "P1.JPG")
+    _touch(tmp_path / "P1.RW2")
+    _touch(tmp_path / "P1.txt")        # other
+    _touch(tmp_path / ".DS_Store")     # skipped
+    unit = resolve_unit(tmp_path, "p1")
+    assert unit.jpg and unit.jpg.name == "P1.JPG"
+    assert unit.raw and unit.raw.name == "P1.RW2"
+    assert [p.name for p in unit.others] == ["P1.txt"]
+    assert not unit.ambiguous
+
+
+def test_resolve_unit_case_insensitive(tmp_path):
+    _touch(tmp_path / "Img.jpg")
+    _touch(tmp_path / "IMG.rw2")
+    unit = resolve_unit(tmp_path, "IMG")
+    assert unit.jpg is not None and unit.raw is not None
+
+
+def test_resolve_unit_ambiguous(tmp_path):
+    _touch(tmp_path / "P1.jpg")
+    _touch(tmp_path / "P1.jpeg")
+    unit = resolve_unit(tmp_path, "p1")
+    assert unit.ambiguous
+    assert unit.jpg is None   # refuses to guess
+
+
+def test_iter_units_recursive_dedup(tmp_path):
+    _touch(tmp_path / "a" / "P1.JPG")
+    _touch(tmp_path / "a" / "P1.RW2")
+    _touch(tmp_path / "b" / "P2.JPG")
+    keys = sorted(u.key[1] for u in iter_units(tmp_path))
+    assert keys == ["p1", "p2"]
