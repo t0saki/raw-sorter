@@ -4,8 +4,13 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from .log import get
+
+log = get("config")
 
 # File classification. Stems are matched case-insensitively; extensions here are lowercase.
 JPG_EXTS = {".jpg", ".jpeg"}
@@ -13,6 +18,10 @@ RAW_EXTS = {
     ".rw2", ".dng", ".cr2", ".cr3", ".crw", ".nef", ".nrw", ".arw", ".sr2", ".srf",
     ".raf", ".orf", ".rwl", ".pef", ".srw", ".x3f", ".3fr", ".fff", ".iiq", ".erf",
     ".mef", ".mos", ".mrw", ".kdc", ".dcr", ".raw", ".gpr",
+}
+VIDEO_EXTS = {
+    ".mp4", ".mov", ".m4v", ".mts", ".m2ts", ".m2t", ".avi", ".3gp", ".3g2",
+    ".mkv", ".webm", ".wmv", ".flv", ".mpg", ".mpeg",
 }
 
 _DURATION_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([smhd]?)\s*$", re.I)
@@ -55,6 +64,17 @@ class Config:
     encode_timeout: float = 300.0
     jpg_disposition: str = "archive"  # archive (beside RAW) | delete
     raw_without_jpg: str = "preview"  # preview | archive | skip
+    # --- video ---
+    video: str = "transcode"          # transcode (1080p HEVC/AAC to album) | copy (original to album) | ignore
+    video_disposition: str = "archive"  # archive the original beside RAW | delete it
+    video_crf: int = 30               # x265 CRF (higher = smaller)
+    video_preset: str = "fast"        # x265 preset (faster on a weak NAS)
+    video_height: int = 1080          # cap output height (never upscales)
+    video_bitdepth: int = 10          # 8 (yuv420p) | 10 (yuv420p10le, Main10 — more efficient)
+    video_x265_params: str = "aq-mode=3:aq-strength=1.0:psy-rd=2.0"  # camera-footage tuning
+    video_acodec: str = "aac"         # aac (max compatibility in MP4) | copy
+    video_abitrate: str = "128k"
+    video_timeout: float = 7200.0     # a transcode is far slower than an image encode
     max_retries: int = 3
     once: bool = False
     dry_run: bool = False
@@ -63,6 +83,14 @@ class Config:
     @property
     def out_ext(self) -> str:
         return ".avif" if self.fmt == "avif" else ".heic"
+
+    @property
+    def out_ext_video(self) -> str:
+        return ".mp4"
+
+    @property
+    def video_pix_fmt(self) -> str:
+        return "yuv420p10le" if self.video_bitdepth == 10 else "yuv420p"
 
     def validate(self) -> None:
         for label, p in (("INPUT", self.input), ("ALBUM", self.album), ("ARCHIVE", self.archive)):
@@ -94,6 +122,25 @@ class Config:
             raise SystemExit("QUALITY must be between 0 and 100")
         if self.workers < 1:
             raise SystemExit("WORKERS must be >= 1")
+        if self.video not in {"transcode", "copy", "ignore"}:
+            raise SystemExit(f"VIDEO must be transcode, copy or ignore, got {self.video!r}")
+        if self.video_disposition not in {"archive", "delete"}:
+            raise SystemExit(f"VIDEO_DISPOSITION must be archive or delete, got {self.video_disposition!r}")
+        if self.video_acodec not in {"aac", "copy"}:
+            raise SystemExit(f"VIDEO_ACODEC must be aac or copy, got {self.video_acodec!r}")
+        if self.video_bitdepth not in {8, 10}:
+            raise SystemExit(f"VIDEO_BITDEPTH must be 8 or 10, got {self.video_bitdepth!r}")
+        if not (0 <= self.video_crf <= 51):
+            raise SystemExit("VIDEO_CRF must be between 0 and 51")
+        # Video transcoding needs ffmpeg/ffprobe on PATH. If they're missing, don't crash the whole
+        # tool — disable video so the image pipeline keeps working — but say so loudly.
+        if self.video == "transcode":
+            missing = [b for b in ("ffmpeg", "ffprobe") if shutil.which(b) is None]
+            if missing:
+                log.warning("VIDEO=transcode but %s not found on PATH — disabling video processing "
+                            "(images still processed). Install ffmpeg or set VIDEO=ignore.",
+                            "/".join(missing))
+                self.video = "ignore"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -123,6 +170,18 @@ def build_parser() -> argparse.ArgumentParser:
                    choices=["archive", "delete"])
     p.add_argument("--raw-without-jpg", default=e("RAW_WITHOUT_JPG", "preview"),
                    choices=["preview", "archive", "skip"])
+    p.add_argument("--video", default=e("VIDEO", "transcode"), choices=["transcode", "copy", "ignore"])
+    p.add_argument("--video-disposition", default=e("VIDEO_DISPOSITION", "archive"),
+                   choices=["archive", "delete"])
+    p.add_argument("--video-crf", type=int, default=int(e("VIDEO_CRF", "30")))
+    p.add_argument("--video-preset", default=e("VIDEO_PRESET", "fast"))
+    p.add_argument("--video-height", type=int, default=int(e("VIDEO_HEIGHT", "1080")))
+    p.add_argument("--video-bitdepth", type=int, default=int(e("VIDEO_BITDEPTH", "10")), choices=[8, 10])
+    p.add_argument("--video-x265-params",
+                   default=e("VIDEO_X265_PARAMS", "aq-mode=3:aq-strength=1.0:psy-rd=2.0"))
+    p.add_argument("--video-acodec", default=e("VIDEO_ACODEC", "aac"), choices=["aac", "copy"])
+    p.add_argument("--video-abitrate", default=e("VIDEO_ABITRATE", "128k"))
+    p.add_argument("--video-timeout", default=e("VIDEO_TIMEOUT", "2h"))
     p.add_argument("--max-retries", type=int, default=int(e("MAX_RETRIES", "3")))
     p.add_argument("--once", action="store_true", default=_env_bool("ONCE", False))
     p.add_argument("--dry-run", action="store_true", default=_env_bool("DRY_RUN", False))
@@ -143,6 +202,11 @@ def load(argv: list[str] | None = None) -> Config:
         rescan_interval=parse_duration(args.rescan_interval),
         encode_timeout=parse_duration(args.encode_timeout),
         jpg_disposition=args.jpg_disposition, raw_without_jpg=args.raw_without_jpg,
+        video=args.video, video_disposition=args.video_disposition, video_crf=args.video_crf,
+        video_preset=args.video_preset, video_height=args.video_height,
+        video_bitdepth=args.video_bitdepth, video_x265_params=args.video_x265_params,
+        video_acodec=args.video_acodec, video_abitrate=args.video_abitrate,
+        video_timeout=parse_duration(args.video_timeout),
         max_retries=args.max_retries, once=args.once, dry_run=args.dry_run,
         log_level=args.log_level,
     )

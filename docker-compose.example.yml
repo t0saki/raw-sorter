@@ -19,6 +19,14 @@ services:
       CHROMA: "420"
       COLOR: srgb           # srgb (convert wide-gamut for compatibility) | preserve
 
+      # --- video ---
+      VIDEO: transcode      # transcode (1080p HEVC/AAC to album) | copy | ignore
+      VIDEO_CRF: "30"       # x265 quality; higher = smaller
+      VIDEO_PRESET: fast    # use faster/ultrafast if your NAS CPU is weak
+      VIDEO_BITDEPTH: "10"  # 10 (Main10, efficient) | 8 (old-hardware compatibility)
+      VIDEO_ACODEC: aac     # aac (max MP4 compatibility) | copy
+      VIDEO_DISPOSITION: archive  # archive original beside the photos | delete
+
       # --- behaviour ---
       WORKERS: "1"          # parallel encodes; keep low on a NAS
       SETTLE_SECONDS: "10"
@@ -28,6 +36,6 @@ services:
       LOG_LEVEL: info
 
     volumes:
-      - /volume1/photo/incoming:/input        # camera card dump (RAW + JPG)
-      - /volume1/photo/Album:/album           # a Synology Photos / synced folder (HEIF only)
-      - /volume1/cold/raw-archive:/archive    # cold storage for RAW masters
+      - /volume1/photo/incoming:/input        # camera card dump (RAW + JPG + video)
+      - /volume1/photo/Album:/album           # a Synology Photos / synced folder (HEIF + 1080p MP4)
+      - /volume1/cold/raw-archive:/archive    # cold storage for RAW + video masters

@@ -16,6 +16,12 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("format=%s quality=%d preset=%s chroma=%s color=%s jpg=%s raw-only=%s",
                 cfg.fmt, cfg.quality, cfg.preset, cfg.chroma, cfg.color,
                 cfg.jpg_disposition, cfg.raw_without_jpg)
+    if cfg.video == "ignore":
+        logger.info("video=ignore")
+    else:
+        logger.info("video=%s crf=%d preset=%s height=%d bitdepth=%d acodec=%s disposition=%s",
+                    cfg.video, cfg.video_crf, cfg.video_preset, cfg.video_height,
+                    cfg.video_bitdepth, cfg.video_acodec, cfg.video_disposition)
     if cfg.dry_run:
         logger.info("DRY-RUN: no files will be written, moved or deleted")
 

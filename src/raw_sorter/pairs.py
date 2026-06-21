@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .config import JPG_EXTS, RAW_EXTS
+from .config import JPG_EXTS, RAW_EXTS, VIDEO_EXTS
 
 # Directories that are never photo input: our own working dirs plus common NAS system folders
 # (Synology @eaDir thumbnails / #recycle / #snapshot, QNAP @Recycle, lost+found). Matched
@@ -24,6 +24,7 @@ class Unit:
     stem: str                      # lower-cased key
     jpgs: list[Path] = field(default_factory=list)
     raws: list[Path] = field(default_factory=list)
+    videos: list[Path] = field(default_factory=list)
     others: list[Path] = field(default_factory=list)
 
     @property
@@ -35,8 +36,12 @@ class Unit:
         return self.raws[0] if len(self.raws) == 1 else None
 
     @property
+    def video(self) -> Path | None:
+        return self.videos[0] if len(self.videos) == 1 else None
+
+    @property
     def ambiguous(self) -> bool:
-        return len(self.jpgs) > 1 or len(self.raws) > 1
+        return len(self.jpgs) > 1 or len(self.raws) > 1 or len(self.videos) > 1
 
     @property
     def key(self) -> tuple[str, str]:
@@ -49,6 +54,8 @@ def classify_ext(path: Path) -> str | None:
         return "jpg"
     if ext in RAW_EXTS:
         return "raw"
+    if ext in VIDEO_EXTS:
+        return "video"
     return None
 
 
@@ -73,6 +80,8 @@ def resolve_unit(directory: Path, stem: str) -> Unit:
             unit.jpgs.append(entry)
         elif kind == "raw":
             unit.raws.append(entry)
+        elif kind == "video":
+            unit.videos.append(entry)
         else:
             unit.others.append(entry)
     return unit

@@ -68,6 +68,13 @@ def _copy_then_replace(src: Path, dst: Path) -> None:
     os.replace(staging, dst)
 
 
+def copy_into(src: Path, dst: Path) -> None:
+    """Full byte-copy of src to dst (metadata preserved). Used to stage a verbatim album copy."""
+    ensure_dir(dst.parent)
+    shutil.copy2(src, dst)
+    fsync_path(dst)
+
+
 def safe_move(src: Path, dst: Path) -> None:
     """Move src->dst, preferring an atomic rename, falling back to copy+verify+delete across volumes."""
     ensure_dir(dst.parent)

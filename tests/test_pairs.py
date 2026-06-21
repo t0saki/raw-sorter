@@ -12,7 +12,33 @@ def test_classify_ext():
     assert classify_ext(Path("a.jpeg")) == "jpg"
     assert classify_ext(Path("a.RW2")) == "raw"
     assert classify_ext(Path("a.dng")) == "raw"
+    assert classify_ext(Path("a.MP4")) == "video"
+    assert classify_ext(Path("a.mov")) == "video"
+    assert classify_ext(Path("a.mts")) == "video"
     assert classify_ext(Path("a.txt")) is None
+
+
+def test_video_only_unit_is_yielded(tmp_path):
+    _touch(tmp_path / "trip" / "C0001.MP4")          # video with no sibling photo
+    units = {u.key[1]: u for u in iter_units(tmp_path)}
+    assert "c0001" in units
+    assert units["c0001"].video is not None
+    assert units["c0001"].jpg is None and units["c0001"].raw is None
+
+
+def test_resolve_unit_routes_video(tmp_path):
+    _touch(tmp_path / "C0001.MP4")
+    unit = resolve_unit(tmp_path, "c0001")
+    assert unit.video is not None and unit.video.name == "C0001.MP4"
+    assert [p.name for p in unit.others] == []
+
+
+def test_resolve_unit_ambiguous_video(tmp_path):
+    _touch(tmp_path / "C1.mp4")
+    _touch(tmp_path / "C1.mov")
+    unit = resolve_unit(tmp_path, "c1")
+    assert unit.ambiguous
+    assert unit.video is None   # refuses to guess
 
 
 def test_should_skip():

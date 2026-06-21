@@ -68,7 +68,7 @@ class Coordinator:
                 self.failed.add(key)
         if give_up:
             u = resolve_unit(directory, stem)
-            files = [p.name for p in u.jpgs + u.raws]
+            files = [p.name for p in u.jpgs + u.raws + u.videos]
             log.error("giving up on %r in %s after %d attempts (%s): %s — left in place for inspection",
                       stem, directory, n, files, exc)
         else:

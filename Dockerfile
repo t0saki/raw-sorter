@@ -19,7 +19,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:3.14-slim-trixie
 # libgomp1: OpenMP runtime used by the x265/aom encoders bundled in the wheels.
-RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+# ffmpeg: video transcoding (brings libx265 + AAC for the 1080p HEVC/AAC album derivatives).
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 ffmpeg \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app /app
@@ -29,5 +30,5 @@ USER 1000:1000
 ENTRYPOINT ["raw-sorter"]
 
 LABEL org.opencontainers.image.source="https://github.com/t0saki/raw-sorter" \
-      org.opencontainers.image.description="Watch RAW+JPG; emit compact HEIF to an album folder and move RAW masters to a cold archive." \
+      org.opencontainers.image.description="Watch RAW+JPG+video; emit compact HEIF/MP4 to an album folder and move RAW/video masters to a cold archive." \
       org.opencontainers.image.licenses="MIT"

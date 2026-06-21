@@ -12,7 +12,7 @@ import uuid
 from enum import Enum
 from pathlib import Path
 
-from . import encode, fsops, rawprev, settle
+from . import encode, fsops, rawprev, settle, video
 from .config import Config
 from .log import get
 from .pairs import Unit, resolve_unit
@@ -45,7 +45,7 @@ def process_unit(unit: Unit, cfg: Config) -> Result:
             log.warning("ambiguous stem %r in %s (jpgs=%s raws=%s) — skipping",
                         stem, directory, [p.name for p in unit.jpgs], [p.name for p in unit.raws])
             return Result.AMBIGUOUS
-        sources = [p for p in (unit.jpg, unit.raw) if p is not None]
+        sources = [p for p in (unit.jpg, unit.raw, unit.video) if p is not None]
         unsettled = [p for p in sources if p.name not in settled]
         if unsettled and not settle.group_stable(
                 unsettled, cfg.settle_seconds, cfg.poll_interval, cfg.settle_max_seconds):
@@ -53,11 +53,11 @@ def process_unit(unit: Unit, cfg: Config) -> Result:
             return Result.NOT_READY
         settled = frozenset(p.name for p in sources)
         unit = resolve_unit(directory, stem)
-        if frozenset(p.name for p in unit.jpgs + unit.raws) <= settled:
+        if frozenset(p.name for p in unit.jpgs + unit.raws + unit.videos) <= settled:
             break  # nothing new landed
 
-    jpg, raw = unit.jpg, unit.raw
-    if jpg is None and raw is None:
+    jpg, raw, video_src = unit.jpg, unit.raw, unit.video
+    if jpg is None and raw is None and video_src is None:
         return Result.NOOP
 
     rel = _relpath(directory, cfg.input)
@@ -131,5 +131,47 @@ def process_unit(unit: Unit, cfg: Config) -> Result:
                 log.info("archived original JPG %s -> %s", jpg.name,
                          os.path.relpath(dst, cfg.archive))
             progressed = True
+
+    # 4) VIDEO: publish a compact derivative to the album, then archive/dispose the original ------
+    # Strict order, same as the photo path: the original is only moved/removed once the album file
+    # is confirmed on disk, so a crash never loses the master.
+    if video_src is not None and cfg.video != "ignore":
+        final = album_dir / (video_src.stem + cfg.out_ext_video)
+        published = final.exists() and video.verify(final)
+        if cfg.dry_run:
+            log.info("[dry-run] would %s video %s -> %s, then %s the original",
+                     cfg.video, video_src.name, final, cfg.video_disposition)
+            progressed = True
+        else:
+            if not published:
+                tmp = (fsops.tmp_dir_for(final)
+                       / f"{video_src.stem}.{uuid.uuid4().hex}.partial{cfg.out_ext_video}")
+                try:
+                    if cfg.video == "transcode":
+                        video.transcode(video_src, tmp, cfg)
+                        if not video.verify(tmp):
+                            raise RuntimeError("transcoded video failed verification")
+                    else:  # copy the original verbatim into the album
+                        fsops.copy_into(video_src, tmp)
+                        if tmp.stat().st_size != video_src.stat().st_size:
+                            raise RuntimeError("copied video size mismatch")
+                    size_mb = tmp.stat().st_size / 1e6
+                    fsops.publish(tmp, final)
+                    log.info("video %s %s -> %s (%.2f MB)", cfg.video, video_src.name,
+                             os.path.relpath(final, cfg.album), size_mb)
+                    published = True
+                    progressed = True
+                finally:
+                    tmp.unlink(missing_ok=True)
+            if published and video_src.exists():
+                if cfg.video_disposition == "delete":
+                    video_src.unlink()
+                    log.info("deleted original video %s", video_src.name)
+                else:
+                    dst = archive_dir / video_src.name
+                    fsops.safe_move(video_src, fsops.unique_dest(dst))
+                    log.info("archived video %s -> %s", video_src.name,
+                             os.path.relpath(dst, cfg.archive))
+                progressed = True
 
     return Result.DONE if progressed or cfg.dry_run else Result.NOOP
