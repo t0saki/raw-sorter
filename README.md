@@ -76,6 +76,8 @@ Every option is an environment variable (handy for the DSM UI) and an equivalent
 | `TUNE` / `--tune` | `ssim` | x265 tune |
 | `CHROMA` / `--chroma` | `420` | `420`, `422` or `444` |
 | `COLOR` / `--color` | `srgb` | `srgb` (convert wide-gamut for max compatibility) or `preserve` |
+| `MAX_MEGAPIXELS` / `--max-megapixels` | `25` | downscale album derivatives whose source exceeds this many MP (`0` disables). Guards against a huge panorama/upscale ballooning encode memory and OOM-killing the container; the full-res master is still archived |
+| `TARGET_MEGAPIXELS` / `--target-megapixels` | `24` | …down to about this many MP (aspect preserved, Lanczos) |
 | `WORKERS` / `--workers` | `1` | parallel encodes (keep low on a NAS) |
 | `SETTLE_SECONDS` / `--settle-seconds` | `10` | a file must be unchanged this long before processing |
 | `RESCAN_INTERVAL` / `--rescan-interval` | `5m` | full rescan safety net for missed events |

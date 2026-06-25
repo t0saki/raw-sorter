@@ -76,6 +76,8 @@ docker compose logs -f
 | `TUNE` / `--tune` | `ssim` | x265 tune |
 | `CHROMA` / `--chroma` | `420` | `420`、`422` 或 `444` |
 | `COLOR` / `--color` | `srgb` | `srgb`（转换广色域以求最大兼容）或 `preserve` |
+| `MAX_MEGAPIXELS` / `--max-megapixels` | `25` | 源图超过这么多 MP 时缩小相册衍生片（`0` 关闭）。防止超大全景/放大图把转码内存撑爆、OOM 杀死容器；全分辨率母片仍照常归档 |
+| `TARGET_MEGAPIXELS` / `--target-megapixels` | `24` | ……缩到约这么多 MP（保持宽高比，Lanczos） |
 | `WORKERS` / `--workers` | `1` | 并行转码数（NAS 上建议小） |
 | `SETTLE_SECONDS` / `--settle-seconds` | `10` | 文件须保持不变这么久才会被处理 |
 | `RESCAN_INTERVAL` / `--rescan-interval` | `5m` | 兜底漏掉事件的全量重扫间隔 |

@@ -56,6 +56,12 @@ class Config:
     tune: str = "ssim"               # x265 tune (heif only)
     chroma: str = "420"              # 420 | 422 | 444
     color: str = "srgb"              # srgb (convert wide-gamut) | preserve (keep/embed source profile)
+    # Album-derivative size cap. A 96 MP panorama/upscale would otherwise balloon encode memory
+    # enough to OOM-kill the container (and exceeds HEVC's max picture size). Sources larger than
+    # max_megapixels are downscaled to ~target_megapixels for the album; the full-res master is
+    # still archived untouched. Set max_megapixels=0 to disable.
+    max_megapixels: float = 25.0
+    target_megapixels: float = 24.0
     workers: int = 1
     settle_seconds: float = 10.0
     settle_max_seconds: float = 600.0
@@ -120,6 +126,12 @@ class Config:
             raise SystemExit(f"RAW_WITHOUT_JPG must be preview, archive or skip, got {self.raw_without_jpg!r}")
         if not (0 <= self.quality <= 100):
             raise SystemExit("QUALITY must be between 0 and 100")
+        if self.max_megapixels < 0:
+            raise SystemExit("MAX_MEGAPIXELS must be >= 0 (0 disables the album-derivative cap)")
+        if self.target_megapixels <= 0:
+            raise SystemExit("TARGET_MEGAPIXELS must be > 0")
+        if self.max_megapixels and self.target_megapixels > self.max_megapixels:
+            raise SystemExit("TARGET_MEGAPIXELS must be <= MAX_MEGAPIXELS")
         if self.workers < 1:
             raise SystemExit("WORKERS must be >= 1")
         if self.video not in {"transcode", "copy", "ignore"}:
@@ -162,6 +174,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tune", default=e("TUNE", "ssim"))
     p.add_argument("--chroma", default=e("CHROMA", "420"), choices=["420", "422", "444"])
     p.add_argument("--color", default=e("COLOR", "srgb"), choices=["srgb", "preserve"])
+    p.add_argument("--max-megapixels", type=float, default=float(e("MAX_MEGAPIXELS", "25")),
+                   help="downscale album derivatives whose source exceeds this many MP (0 disables)")
+    p.add_argument("--target-megapixels", type=float, default=float(e("TARGET_MEGAPIXELS", "24")),
+                   help="…down to about this many MP, aspect preserved (env TARGET_MEGAPIXELS)")
     p.add_argument("--workers", type=int, default=int(e("WORKERS", "1")))
     p.add_argument("--settle-seconds", type=float, default=parse_duration(e("SETTLE_SECONDS", "10")))
     p.add_argument("--rescan-interval", default=e("RESCAN_INTERVAL", "5m"))
@@ -197,7 +213,9 @@ def load(argv: list[str] | None = None) -> Config:
         input=Path(args.input).resolve(), album=Path(args.album).resolve(),
         archive=Path(args.archive).resolve(),
         fmt=args.fmt, quality=args.quality, preset=args.preset, tune=args.tune,
-        chroma=args.chroma, color=args.color, workers=args.workers,
+        chroma=args.chroma, color=args.color,
+        max_megapixels=args.max_megapixels, target_megapixels=args.target_megapixels,
+        workers=args.workers,
         settle_seconds=args.settle_seconds,
         rescan_interval=parse_duration(args.rescan_interval),
         encode_timeout=parse_duration(args.encode_timeout),

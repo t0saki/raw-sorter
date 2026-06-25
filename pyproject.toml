@@ -1,6 +1,6 @@
 [project]
 name = "raw-sorter"
-version = "0.2.0"
+version = "0.2.1"
 description = "Watch a camera RAW+JPG+video folder; emit compact HEIF/MP4 to a photo-album folder and move RAW/video masters to a cold archive."
 readme = "README.md"
 requires-python = ">=3.10"

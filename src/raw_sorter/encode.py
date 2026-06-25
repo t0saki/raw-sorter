@@ -8,6 +8,7 @@ Pipeline per image:
 """
 from __future__ import annotations
 
+import math
 import threading
 from pathlib import Path
 
@@ -16,6 +17,9 @@ from PIL import Image, ImageOps
 
 from . import color
 from .config import Config
+from .log import get
+
+log = get("encode")
 
 _REGISTERED = False
 
@@ -31,8 +35,33 @@ def _ensure_registered() -> None:
         _REGISTERED = True
 
 
+def _downscale_if_huge(img: Image.Image, cfg: Config) -> Image.Image:
+    """Cap the album derivative at ~cfg.target_megapixels when the source exceeds cfg.max_megapixels.
+
+    A 96 MP panorama/upscale would otherwise (a) balloon encode memory — the Adobe-RGB->sRGB pass
+    and x265 together peaked at ~7.6 GB on one such file, enough to OOM-kill the container — and
+    (b) exceed HEVC's max picture size, yielding a non-conformant HEIF. We only shrink the
+    derivative; the full-res master is still archived untouched. Aspect ratio is preserved, and we
+    carry .info forward so EXIF (GPS/date) pass-through and Adobe-RGB detection still see it.
+    """
+    if cfg.max_megapixels <= 0:
+        return img
+    px = img.width * img.height
+    if px <= cfg.max_megapixels * 1_000_000:
+        return img
+    scale = math.sqrt(cfg.target_megapixels * 1_000_000 / px)
+    size = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
+    info = img.info
+    out = img.resize(size, Image.LANCZOS)
+    out.info = info
+    log.info("downscaled oversized image %.1f MP -> %.1f MP (%dx%d) for the album derivative",
+             px / 1e6, size[0] * size[1] / 1e6, size[0], size[1])
+    return out
+
+
 def _prepare(img: Image.Image, cfg: Config) -> Image.Image:
     img = ImageOps.exif_transpose(img)            # bake orientation, clears the EXIF tag
+    img = _downscale_if_huge(img, cfg)            # cap the derivative; the master stays full-res
     if cfg.color == "srgb" and color.is_adobe_rgb(img):
         exif = img.info.get("exif")
         img = color.adobe_rgb_to_srgb(img)
