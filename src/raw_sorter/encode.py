@@ -15,7 +15,7 @@ from pathlib import Path
 import pillow_heif
 from PIL import Image, ImageOps
 
-from . import color
+from . import color, heif_pixi
 from .config import Config
 from .log import get
 
@@ -99,6 +99,24 @@ def encode_pil(img: Image.Image, dst: Path, cfg: Config) -> None:
     kw = _save_kwargs(cfg, exif, icc)
     fmt = kw.pop("format")
     prepared.save(dst, format=fmt, **kw)
+    _repair_pixi(dst, prepared.mode)
+
+
+def _repair_pixi(dst: Path, mode: str) -> None:
+    """Fix libheif's single-channel `pixi` on colour output (see heif_pixi for the full why).
+
+    Without this the album HEIFs render black-and-white on iOS and crushed-to-black on macOS SDR,
+    while thumbnails and the macOS HDR path still show colour. We know the source mode here, so we
+    tell the repairer outright whether the picture is colour instead of re-parsing the bitstream.
+    """
+    try:
+        data = dst.read_bytes()
+        fixed = heif_pixi.fix_pixi(data, assume_colour=(mode in ("RGB", "RGBA")))
+        if fixed is not None:
+            dst.write_bytes(fixed)
+            log.debug("repaired single-channel pixi -> 3 channels on %s", dst.name)
+    except Exception:  # noqa: BLE001 — a repair failure must never lose an otherwise-good encode
+        log.warning("pixi repair skipped for %s", dst.name, exc_info=True)
 
 
 def encode_file(src: Path, dst: Path, cfg: Config) -> None:

@@ -109,6 +109,22 @@ uv run raw-sorter --input ./IN --album ./ALBUM --archive ./ARCHIVE --once
 uv run raw-sorter --input ./IN --album ./ALBUM --archive ./ARCHIVE
 ```
 
+## Repairing photos exported before v0.2.2
+
+libheif (bundled in pillow-heif) tagged colour HEIFs with a single-channel `pixi` property, so they
+render **black-and-white on iOS** and crushed-to-black on the macOS SDR display path, even though
+thumbnails and the macOS HDR path show colour. v0.2.2 fixes new output; to repair files already in
+your album/NAS, run the in-place repair tool (2-byte metadata edit — no re-encode, no quality loss,
+idempotent, skips genuine monochrome):
+
+```bash
+raw-sorter-fixpixi /path/to/album            # recurses into directories
+raw-sorter-fixpixi --dry-run /path/to/album  # report only, write nothing
+```
+
+`src/raw_sorter/heif_pixi.py` is pure stdlib — copy that one file to a NAS and run it with the system
+`python3` if installing the package there is inconvenient.
+
 ## How it works & safety
 
 For each shot (files sharing a basename), in strict order: encode the JPG → atomically publish the HEIF to the album → move the RAW to the archive → dispose of the original JPG. Video runs the same way: transcode → atomically publish the 1080p MP4 to the album → move the original video to the archive. The RAW / original-video master and original JPG are never removed until their replacements are confirmed on disk, so an interrupted run loses nothing and simply resumes. A fully-processed shot leaves nothing in the input tree, so it's never reprocessed.

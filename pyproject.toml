@@ -1,6 +1,6 @@
 [project]
 name = "raw-sorter"
-version = "0.2.1"
+version = "0.2.2"
 description = "Watch a camera RAW+JPG+video folder; emit compact HEIF/MP4 to a photo-album folder and move RAW/video masters to a cold archive."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,6 +21,7 @@ Source = "https://github.com/t0saki/raw-sorter"
 
 [project.scripts]
 raw-sorter = "raw_sorter.__main__:main"
+raw-sorter-fixpixi = "raw_sorter.heif_pixi:main"
 
 [dependency-groups]
 dev = ["pytest>=8.0"]

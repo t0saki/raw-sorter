@@ -109,6 +109,21 @@ uv run raw-sorter --input ./IN --album ./ALBUM --archive ./ARCHIVE --once
 uv run raw-sorter --input ./IN --album ./ALBUM --archive ./ARCHIVE
 ```
 
+## 修复 v0.2.2 之前导出的照片
+
+libheif（pillow-heif 内置）给彩色 HEIF 写了单通道的 `pixi` 属性，导致它们在 **iOS 上显示为黑白**、在
+macOS 的 SDR 屏幕路径上被压成死黑，而缩略图和 macOS 的 HDR 路径却正常显示彩色。v0.2.2 修复了新产出的文件；
+已经在相册/NAS 里的旧文件，用原地修复工具处理（只改 2 字节元数据 —— 不重新编码、不掉画质、可重复运行、会自动跳过
+真正的黑白图）：
+
+```bash
+raw-sorter-fixpixi /path/to/album            # 会递归子目录
+raw-sorter-fixpixi --dry-run /path/to/album  # 只报告，不写入
+```
+
+`src/raw_sorter/heif_pixi.py` 是纯标准库实现 —— 如果在 NAS 上装包不方便，把这一个文件拷过去，用系统自带的
+`python3` 直接跑即可。
+
 ## 工作原理与安全性
 
 对每张照片（同名的一组文件），严格按顺序：转码 JPG → 原子地把 HEIF 发布到相册 → 把 RAW 移到存档 → 处置原始 JPG。视频同理：转码 → 原子地把 1080p MP4 发布到相册 → 把原始视频移到存档。RAW / 原始视频母片和原始 JPG 在其替代物落盘确认之前绝不会被删除，所以中断的运行不会丢任何东西，重启后会从断点继续。完全处理完的照片/视频在输入目录里不留任何文件，因此不会被重复处理。
